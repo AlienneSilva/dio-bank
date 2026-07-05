@@ -1,9 +1,11 @@
 from flask import Blueprint, request
+from flask_jwt_extended import jwt_required
 from src.models import Usuario, db
+from src.utils import required_role
+from src.app import bcrypt
 from http import HTTPStatus
 from sqlalchemy import inspect
-from flask_jwt_extended import jwt_required
-from src.utils import required_role
+
 
 app = Blueprint('usuario', __name__, url_prefix="/usuarios")
 
@@ -14,7 +16,7 @@ def _create_usuario():
     # Criamos APENAS UM usuário com todos os dados juntos
     novo_usuario = Usuario(
         username=data["username"],
-        password=data["password"],
+        password=bcrypt.generate_password_hash(data["password"]),
         role_id=data["role_id"],
     )
     

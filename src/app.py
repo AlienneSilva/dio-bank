@@ -1,11 +1,14 @@
 import os
 
 from flask import Flask
-from src.db import db  # <-- Importa o db do seu arquivo db.py
-from urllib.parse import quote_plus  # <-- Adicione essa importação lá no topo
-from src.models import db
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
+from flask_bcrypt import Bcrypt
+from src.db import db  # <-- Importa o db do seu arquivo db.py
+from src.models import db
+from urllib.parse import quote_plus  # <-- Adicione essa importação lá no topo
+
+bcrypt = Bcrypt()
 
 migrate = Migrate()
 jwt = JWTManager()
@@ -32,6 +35,7 @@ def create_app(enviroment=os.environ["ENVIROMENT"]):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    bcrypt.init_app(app)
 
     # Register Blueprints
     from src.controllers import usuario, post, auth, role
