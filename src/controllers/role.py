@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from src.app import Role, db
+from src.models import Role, db
 from http import HTTPStatus
 
 

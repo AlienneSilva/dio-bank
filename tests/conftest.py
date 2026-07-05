@@ -4,13 +4,7 @@ from src.app import create_app, db, Usuario, Role
 
 @pytest.fixture#quando for fazer teste cuidado com o escopo
 def app():
-    app = create_app({
-        "TESTING": True,  # Avisa o Flask que ele está em modo de teste
-        "SECRET_KEY": "test",
-        "JWT_SECRET_KEY": "uma-chave-secreta-longa-para-o-ambiente-de-testes",
-        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",  # <-- Banco na memória RAM!
-        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-    })
+    app = create_app(enviroment= "testing")
 
        # Cria as tabelas na memória antes do teste começar
     with app.app_context():
