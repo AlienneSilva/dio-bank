@@ -1,10 +1,15 @@
+from http import HTTPStatus
+
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
+from marshmallow import ValidationError
+from sqlalchemy import inspect
+from src.app import bcrypt
 from src.models import Usuario, db
 from src.utils import required_role
-from src.app import bcrypt
-from http import HTTPStatus
-from sqlalchemy import inspect
+from src.views.user import  CreateUserSchema, UsuarioSchema
+
+
 
 
 app = Blueprint('usuario', __name__, url_prefix="/usuarios")
@@ -12,37 +17,40 @@ app = Blueprint('usuario', __name__, url_prefix="/usuarios")
 
 
 def _create_usuario():
-    data = request.json    
+    user_schema = CreateUserSchema()
+    try:
+        data = user_schema.load(request.json)  
+    except ValidationError as exc:
+        return exc.messages, HTTPStatus.UNPROCESSABLE_ENTITY
     # Criamos APENAS UM usuário com todos os dados juntos
     novo_usuario = Usuario(
         username=data["username"],
-        password=bcrypt.generate_password_hash(data["password"]),
+        password=bcrypt.generate_password_hash(data["password"]).decode('utf-8'),
         role_id=data["role_id"],
     )
     
     # Adicionamos esse único usuário na sessão
     db.session.add(novo_usuario)
     db.session.commit()
+    return {"message": "Usuario criado!"}, HTTPStatus.CREATED
 
+@jwt_required()
+@required_role("Admin")
 def _list_usuarios():
     query = db.select(Usuario)
-    results = db.session.execute(query).scalars().all()
-    return results
+    usuarios = db.session.execute(query).scalars()
+    usuarios_schema = UsuarioSchema(many=True)
+    return usuarios_schema.dump(usuarios)
+    
 
 
 
 @app.route('/', methods=['GET', 'POST'])
-@jwt_required()
-@required_role("Admin")
-def handle_usuario():   
-
+def handle_usuario():
     if request.method == 'POST':
-        _create_usuario()
-        return {"message": "Usuario criado!"}, HTTPStatus.CREATED
+        return _create_usuario()        
     else:
-        usuarios = _list_usuarios()
-        lista_formatada = [{"id": u.id, "username": u.username,"role": {"id":u.role_id,"name": u.role.name}} for u in usuarios]
-        return {"Usuarios": lista_formatada}, HTTPStatus.OK
+        return {"Usuarios": _list_usuarios()}
     
 
 @app.route('/<int:usuario_id>')

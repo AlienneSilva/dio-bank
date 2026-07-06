@@ -14,7 +14,9 @@ dependencies = [
     "flask-jwt-extended (>=4.7.4,<5.0.0)",
     "markupsafe (>=3.0.3,<4.0.0)",
     "gunicorn",
-    "flask-bcrypt"
+    "flask-bcrypt",
+    "flask-marshmallow",
+    "marshmallow-sqlalchemy"
 ]
 
 [tool.pytest]

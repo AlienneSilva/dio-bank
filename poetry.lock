@@ -198,6 +198,25 @@ Werkzeug = ">=0.14"
 asymmetric-crypto = ["cryptography (>=3.3.1)"]
 
 [[package]]
+name = "flask-marshmallow"
+version = "1.5.0"
+description = "Flask + marshmallow for beautiful APIs"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "flask_marshmallow-1.5.0-py3-none-any.whl", hash = "sha256:99951c77e5654111ed733811c6dc9310bfb4c3688c78a9e76f80b5ae0b2279a6"},
+    {file = "flask_marshmallow-1.5.0.tar.gz", hash = "sha256:7c06b56e41647eccdb3cd57c25b109f19191b4c62509362bd64920cdf601a066"},
+]
+
+[package.dependencies]
+Flask = ">=2.2"
+marshmallow = ">=4.0.0"
+
+[package.extras]
+sqlalchemy = ["flask-sqlalchemy (>=3.0.0)", "marshmallow-sqlalchemy (>=1.4.0)"]
+
+[[package]]
 name = "flask-migrate"
 version = "4.1.0"
 description = "SQLAlchemy database migrations for Flask applications using Alembic."
@@ -511,6 +530,34 @@ files = [
     {file = "markupsafe-3.0.3-cp39-cp39-win_arm64.whl", hash = "sha256:38664109c14ffc9e7437e86b4dceb442b0096dfe3541d7864d9cbe1da4cf36c8"},
     {file = "markupsafe-3.0.3.tar.gz", hash = "sha256:722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698"},
 ]
+
+[[package]]
+name = "marshmallow"
+version = "4.3.0"
+description = "A lightweight library for converting complex datatypes to and from native Python datatypes."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "marshmallow-4.3.0-py3-none-any.whl", hash = "sha256:46c4fe6984707e3cbd485dfebbf0a59874f58d695aad05c1668d15e8c6e13b46"},
+    {file = "marshmallow-4.3.0.tar.gz", hash = "sha256:fb43c53b3fe240b8f6af37223d6ef1636f927ad9bea8ab323afad95dff090880"},
+]
+
+[[package]]
+name = "marshmallow-sqlalchemy"
+version = "1.5.0"
+description = "SQLAlchemy integration with the marshmallow (de)serialization library"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "marshmallow_sqlalchemy-1.5.0-py3-none-any.whl", hash = "sha256:3865232672f3dd38c4d5e4e85fdedce76904200742c3594948a2d11d0af93258"},
+    {file = "marshmallow_sqlalchemy-1.5.0.tar.gz", hash = "sha256:e51192c204770645a2fab0d72f44f8789272eef75951f84b1608d6b4b0bfe0e6"},
+]
+
+[package.dependencies]
+marshmallow = ">=3.18.0"
+SQLAlchemy = ">=1.4.40,<3.0"
 
 [[package]]
 name = "packaging"
@@ -843,4 +890,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.14,<4.0"
-content-hash = "374b33fd4cea92e64edf80bf3ee6fd7da6d488cbe39b4c36d3240a9fe42ff72b"
+content-hash = "72630c03c327f9f107a09f087e15f265c4b421915e8bcf673c7d61551057656a"

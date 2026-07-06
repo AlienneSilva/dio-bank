@@ -18,7 +18,7 @@ def login():
     # O jeito correto: Classe.coluna == variavel_string
     usuario = db.session.execute(db.select(Usuario).where(Usuario.username == username)).scalar()
 
-    if not usuario or not _valid_password (usuario.password, password):
+    if not usuario or not _valid_password (usuario.password, password):        
         return {"msg": "Usuário ou senha inválidos"}, HTTPStatus.UNAUTHORIZED
 
     access_token = create_access_token(identity=str(usuario.id))
