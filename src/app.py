@@ -1,7 +1,8 @@
 import os
-
-from flask import Flask
-from flask import json
+from apispec import APISpec
+from apispec.ext.marshmallow import MarshmallowPlugin
+from apispec_webframeworks.flask import FlaskPlugin
+from flask import Flask, json
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
@@ -16,6 +17,14 @@ bcrypt = Bcrypt()
 migrate = Migrate()
 jwt = JWTManager()
 ma = Marshmallow()
+
+spec = APISpec(
+    title="Dio Bank",
+    version="1.0.0",
+    openapi_version='3.0.3',
+    info=dict(description="Dio Bank API"),
+    plugins=[FlaskPlugin(), MarshmallowPlugin()],
+)
 
 def create_app(enviroment=os.environ["ENVIROMENT"]):
     app = Flask(__name__, instance_relative_config=True)
@@ -50,6 +59,10 @@ def create_app(enviroment=os.environ["ENVIROMENT"]):
     app.register_blueprint(post.app)
     app.register_blueprint(auth.app)
     app.register_blueprint(role.app)
+
+    @app.route('/docs')
+    def docs():
+        return spec.path(view=usuario.get_usuario).path(view=usuario.delete_usuario).to_dict()
 
    
     @app.errorhandler(HTTPException)

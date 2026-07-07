@@ -8,6 +8,9 @@ class UsuarioSchema(ma.SQLAlchemyAutoSchema):
         model = Usuario
         include_fk = True
 
+class UserIdParameter(ma.Schema):
+    usuario_id = fields.Int(required=True, strict=True)
+
 
 class CreateUserSchema(ma.Schema):
     username = fields.Str(required=True)

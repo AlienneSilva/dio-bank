@@ -16,7 +16,8 @@ dependencies = [
     "gunicorn",
     "flask-bcrypt",
     "flask-marshmallow",
-    "marshmallow-sqlalchemy"
+    "marshmallow-sqlalchemy",
+    "apispec-webframeworks"
 ]
 
 [tool.pytest]

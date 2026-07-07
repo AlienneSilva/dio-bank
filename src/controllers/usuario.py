@@ -55,6 +55,24 @@ def handle_usuario():
 
 @app.route('/<int:usuario_id>')
 def get_usuario(usuario_id):
+    """User detail view.
+    ---
+    get:
+      tags: 
+        - user
+      summary: Selection a user
+      description: Selection a user
+      parameters:
+        - in: path
+          name: usuario_id
+          schema: UserIdParameter
+      responses:
+        200:
+          description: Successful operation
+          content:
+            aplication/json:
+              schema: UsuarioSchema
+    """
     usuario = db.get_or_404(Usuario, usuario_id)
     return {"id": usuario.id,"username": usuario.username}
 
@@ -76,6 +94,23 @@ def update_usuario(usuario_id):
 
 @app.route('/<int:usuario_id>', methods=["DELETE"])
 def delete_usuario(usuario_id):
+    """User delete view.
+    ---
+    delete:
+      tags: 
+        - user
+      summary: Deletes a user
+      description: delete a user
+      parameters:
+        - in: path
+          name: usuario_id
+          schema: UserIdParameter
+      responses:
+        204:
+          description: Successful operation
+        404:
+          description: Not Found User
+    """
     usuario = db.get_or_404(Usuario, usuario_id)
     db.session.delete(usuario)
     db.session.commit()
