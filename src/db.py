@@ -1,49 +1,45 @@
-import psycopg
-from psycopg.rows import dict_row
-from flask import current_app, g
-import click
+import os
+from typing import AsyncGenerator
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from flask_sqlalchemy import SQLAlchemy
+from src.config import settings
 
-# Instancia o SQLAlchemy aqui para poder importar nos modelos e rotas
-db = SQLAlchemy()
+# Cria o engine assíncrono baseado na URL definida pelo ambiente
+engine = create_async_engine(
+    settings.database_url,
+    echo=(settings.ENVIRONMENT == "development"),
+    # Exibe queries SQL no terminal em dev
+)
 
-def get_db():
-    if 'db' not in g:
-        # Conecta ao PostgreSQL usando a string que configuramos no __init__.py
-        # E já ativa o dict_row para aceitar a busca por nome de coluna!
-        g.db = psycopg.connect(
-            current_app.config['DATABASE'],
-            row_factory=dict_row
-        )
-    return g.db
-
-def close_db(e=None):
-    # Remove o banco do contexto 'g' e fecha a conexão se ela existir
-    db = g.pop('db', None)
-
-    if db is not None:
-        db.close()
-
-def init_db():
-    db = get_db()
-    
-    # No PostgreSQL, precisamos do cursor para rodar comandos
-    cursor = db.cursor()
-
-    # Abrimos o arquivo schema.sql (repare que tirei o .decode('utf8') 
-    # porque abrir com a propriedade encoding='utf-8' já resolve e é mais limpo)
-    with current_app.open_resource('schema.sql', mode='r', encoding='utf-8') as f:
-        # Executamos o conteúdo do arquivo usando o cursor
-        cursor.execute(f.read())
-    
-   
-    db.commit()
-    cursor.close()
+# Fábrica de sessões assíncronas
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
 
 
+async def init_db() -> None:
+    """Executa o script schema.sql na inicialização do banco."""
+    schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+    if not os.path.exists(schema_path):
+        return
 
-def init_app(app):
-    app.teardown_appcontext(close_db)
-    
+    with open(schema_path, mode="r", encoding="utf-8") as f:
+        schema_sql = f.read()
 
+    async with engine.begin() as conn:
+        # Divide as instruções por ';'
+        # para compatibilidade entre SQLite e PostgreSQL
+        for statement in schema_sql.split(";"):
+            clean_stmt = statement.strip()
+            if clean_stmt:
+                await conn.execute(text(clean_stmt))
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Injetor de dependência para rotas do FastAPI."""
+    async with AsyncSessionLocal() as session:
+        yield session

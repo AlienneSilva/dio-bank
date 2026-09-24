@@ -1,39 +1,79 @@
+import os
+import sqlite3
+from collections.abc import AsyncGenerator
 import pytest
-from src.app import create_app, db, Usuario, Role
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from src.app import app
+from src.db import get_db_session
+
+TEST_DB_FILE = "./test_bank.db"
+TEST_DATABASE_URL = f"sqlite+aiosqlite:///{TEST_DB_FILE}"
+
+test_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
+
+TestSessionLocal = async_sessionmaker(
+    bind=test_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
-@pytest.fixture#quando for fazer teste cuidado com o escopo
-def app():
-    app = create_app(enviroment= "testing")
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """Cria a base de dados de teste lendo o schema.sql de forma síncrona."""
+    if os.path.exists(TEST_DB_FILE):
+        try:
+            os.remove(TEST_DB_FILE)
+        except OSError:
+            pass
 
-       # Cria as tabelas na memória antes do teste começar
-    with app.app_context():
-        db.create_all()
+    schema_path = os.path.join(
+        os.path.dirname(__file__), "..", "src", "schema.sql"
+    )
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema_sql = f.read()
 
-        yield app
-    # Limpa tudo da memória após o término do teste
-        db.drop_all()
-    # clean up / reset resources here
+    conn = sqlite3.connect(TEST_DB_FILE)
+    conn.executescript(schema_sql)
+    conn.commit()
+    conn.close()
+
+    yield
+
+    # Libera os handles de conexao abertos pelo SQLAlchemy
+    test_engine.sync_engine.dispose()
+
+    if os.path.exists(TEST_DB_FILE):
+        try:
+            os.remove(TEST_DB_FILE)
+        except OSError:
+            pass
 
 
-@pytest.fixture
-def client(app):
-    return app.test_client()
+async def override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with TestSessionLocal() as session:
+        yield session
 
-@pytest.fixture
-def access_token(client):
-      
-        role = Role(name="Admin")
-        db.session.add(role)
-        db.session.commit()        
-               
-        usuario = Usuario(            
-            username="admin_teste",
-            password="123",
-            role_id=role.id 
-        )
-        db.session.add(usuario)
-        db.session.commit()
 
-        response = client.post("/auth/login", json={"username": usuario.username, "password": usuario.password})        
-        return response.json["access_token"]  
+app.dependency_overrides[get_db_session] = override_get_db_session
+
+
+# Utiliza pytest_asyncio.fixture para o pytest reconhecer o gerador assíncrono
+@pytest_asyncio.fixture
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    """Cliente HTTP assíncrono para testar a API."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as ac:
+        yield ac

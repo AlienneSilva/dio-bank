@@ -1,25 +1,30 @@
-import os
-
-class Config:
-    TESTING = False 
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-    SQLALCHEMY_DATABASE_URI = os.getenv("database_url")
-
-class ProductionConfig(Config):
-    pass
-#para rodar usar esse comando: 
-#ENVIROMENT=production DATABASE_URL="postgresql+psycopg://postgres:SUA_SENHA_AQUI@127.0.0.1:5432/diobank" poetry run flask --app src.app run
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class DevelopmentConfig(Config):
-    SECRET_KEY = "dev"
-    JWT_SECRET_KEY = "JWT_SECRET_KEY"
-    SQLALCHEMY_DATABASE_URI = f'postgresql+psycopg://postgres:snhus@127.0.0.1:5432/diobank'
-    
-class TestingConfig(Config):
-    TESTING =  True  # Avisa o Flask que ele está em modo de teste
-    SECRET_KEY =  "test"
-    JWT_SECRET_KEY = "uma-chave-secreta-longa-para-o-ambiente-de-testes"
-    SQLALCHEMY_DATABASE_URI =  "sqlite:///:memory:"  # <-- Banco na memória RAM!
-        
+class Settings(BaseSettings):
+    ENVIRONMENT: str = (
+        "development"  # Altere para "production" quando for para deploy
+    )
+
+    # SQLite para desenvolvimento local
+    DEV_DATABASE_URL: str = "sqlite+aiosqlite:///./dio_bank.db"
+
+    # PostgreSQL para produção (lido do .env de produção)
+    PROD_DATABASE_URL: str = ""
+
+    SECRET_KEY: str = "sua_chave_secreta_jwt"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    @property
+    def database_url(self) -> str:
+        if self.ENVIRONMENT == "production" and self.PROD_DATABASE_URL:
+            return self.PROD_DATABASE_URL
+        return self.DEV_DATABASE_URL
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
+settings = Settings()
