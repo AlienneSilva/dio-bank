@@ -13,21 +13,22 @@ router = APIRouter(prefix="/transacoes", tags=["Transações Bancárias"])
 async def depositar(
     payload: DepositoIn, session: AsyncSession = Depends(get_db_session)
 ):
-    query_conta = await session.execute(
-        text("SELECT id, saldo FROM contas WHERE id = :id AND ativa = 1"),
-        {"id": payload.conta_id},
+    if payload.valor <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O valor do depósito deve ser maior que zero.",
+        )
+
+    res_update = await session.execute(
+        text("UPDATE contas SET saldo = saldo + :valor WHERE id = :id AND ativa = 1"),
+        {"valor": float(payload.valor), "id": payload.conta_id},
     )
-    conta = query_conta.mappings().first()
-    if not conta:
+
+    if res_update.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conta não encontrada ou inativa.",
         )
-
-    await session.execute(
-        text("UPDATE contas SET saldo = saldo + :valor WHERE id = :id"),
-        {"valor": float(payload.valor), "id": payload.conta_id},
-    )
 
     query_transacao = """
         INSERT INTO transacoes (conta_destino_id, tipo, valor, descricao)
@@ -48,12 +49,15 @@ async def sacar(
     session: AsyncSession = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
+    if payload.valor <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O valor do saque deve ser maior que zero.",
+        )
+
+   # 1. Valida titularidade
     query_conta = await session.execute(
-        text("""
-            SELECT id, correntista_id, saldo
-            FROM contas
-            WHERE id = :id AND ativa = 1
-        """),
+        text("SELECT correntista_id FROM contas WHERE id = :id AND ativa = 1"),
         {"id": payload.conta_id},
     )
     conta = query_conta.mappings().first()
@@ -63,23 +67,30 @@ async def sacar(
             detail="Conta não encontrada ou inativa.",
         )
 
-    if int(conta["correntista_id"]) != int(current_user["id"]):
+    token_user_id = current_user.get("id") or current_user.get("sub")
+    if int(conta["correntista_id"]) != int(token_user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Operação não autorizada para esta conta bancária.",
         )
 
-    if float(conta["saldo"]) < float(payload.valor):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Saldo insuficiente para saque.",
-        )
-
-    await session.execute(
-        text("UPDATE contas SET saldo = saldo - :valor WHERE id = :id"),
+    # 2. Atualização atômica anti-race condition
+    res_update = await session.execute(
+        text("""
+            UPDATE contas 
+            SET saldo = saldo - :valor 
+            WHERE id = :id AND saldo >= :valor AND ativa = 1
+        """),
         {"valor": float(payload.valor), "id": payload.conta_id},
     )
 
+    if res_update.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Saldo insuficiente ou transação concorrente detectada.",
+        )
+
+    # 3. Registro no extrato
     query_transacao = """
         INSERT INTO transacoes (conta_origem_id, tipo, valor, descricao)
         VALUES (:conta_id, 'SAQUE', :valor, 'Saque em caixa eletrônico');
@@ -99,18 +110,21 @@ async def transferir(
     session: AsyncSession = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
+    if payload.valor <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O valor da transferência deve ser maior que zero.",
+        )
+
     if payload.conta_origem_id == payload.conta_destino_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Contas de origem e destino não podem ser idênticas.",
         )
 
+ # 1. Verifica titularidade da conta de origem
     query_origem = await session.execute(
-        text("""
-            SELECT id, correntista_id, saldo
-            FROM contas
-            WHERE id = :id AND ativa = 1
-        """),
+        text("SELECT correntista_id FROM contas WHERE id = :id AND ativa = 1"),
         {"id": payload.conta_origem_id},
     )
     origem = query_origem.mappings().first()
@@ -120,42 +134,51 @@ async def transferir(
             detail="Conta de origem não encontrada ou inativa.",
         )
 
-    if int(origem["correntista_id"]) != int(current_user["id"]):
+    token_user_id = current_user.get("id") or current_user.get("sub")
+    if int(origem["correntista_id"]) != int(token_user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas o titular pode transferir desta conta.",
         )
 
-    if float(origem["saldo"]) < float(payload.valor):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Saldo insuficiente.",
-        )
-
+    # 2. Verifica existência da conta de destino
     query_destino = await session.execute(
         text("SELECT id FROM contas WHERE id = :id AND ativa = 1"),
         {"id": payload.conta_destino_id},
     )
-    destino = query_destino.mappings().first()
-    if not destino:
+    if not query_destino.mappings().first():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conta de destino não encontrada ou inativa.",
         )
 
-    await session.execute(
-        text("UPDATE contas SET saldo = saldo - :valor WHERE id = :id"),
+    # 3. Débito atômico na origem (protege contra race condition)
+    res_debito = await session.execute(
+        text("""
+            UPDATE contas 
+            SET saldo = saldo - :valor 
+            WHERE id = :id AND saldo >= :valor AND ativa = 1
+        """),
         {"valor": float(payload.valor), "id": payload.conta_origem_id},
     )
+
+    if res_debito.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Saldo insuficiente ou concorrência detectada.",
+        )
+
+    # 4. Crédito no destino
     await session.execute(
-        text("UPDATE contas SET saldo = saldo + :valor WHERE id = :id"),
+        text("UPDATE contas SET saldo = saldo + :valor WHERE id = :id AND ativa = 1"),
         {"valor": float(payload.valor), "id": payload.conta_destino_id},
     )
 
+    # 5. Registro imutável no extrato
     query_transacao = """
         INSERT INTO transacoes
         (conta_origem_id, conta_destino_id, tipo, valor, descricao)
-        VALUES (:origem, :destino, 'TRANSFERENCIA', :valor, 'Transferência');
+        VALUES (:origem, :destino, 'TRANSFERENCIA', :valor, 'Transferência bancária');
     """
     await session.execute(
         text(query_transacao),
